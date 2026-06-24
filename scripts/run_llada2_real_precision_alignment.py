@@ -41,6 +41,9 @@ max_seq_len = int(sys.argv[8])
 sample_index = int(sys.argv[9])
 text_key = sys.argv[10]
 mask_token_id = int(sys.argv[11])
+device = sys.argv[12]
+dtype_name = sys.argv[13]
+enable_backward = sys.argv[14].lower() == "true"
 
 sys.path.insert(0, str(repo))
 sys.path.insert(0, str(repo / "VeOmni"))
@@ -85,9 +88,8 @@ def read_sample(path: Path, index: int):
 
 
 def reference_fused_moe_forward(module, num_experts, routing_weights, selected_experts, hidden_states, fc1_1_weight, fc1_2_weight, fc2_weight):
-    del module
     output = torch.zeros_like(hidden_states)
-    act_fn = F.silu
+    act_fn = getattr(module, "act_fn", F.silu)
     for expert_idx in range(num_experts):
         token_mask = selected_experts == expert_idx
         if not token_mask.any():
@@ -135,6 +137,16 @@ if mode == "legacy":
 from transformers import AutoTokenizer
 
 
+def resolve_dtype(name: str):
+    if name == "float32":
+        return torch.float32
+    if name == "bfloat16":
+        return torch.bfloat16
+    if name == "float16":
+        return torch.float16
+    raise ValueError(f"Unsupported dtype: {name}")
+
+
 def load_weights(model, model_path: Path):
     if str(model_path) == "":
         return {"missing": [], "unexpected": []}
@@ -161,9 +173,16 @@ def load_weights(model, model_path: Path):
 config = LLaDA2MoeConfig.from_pretrained(str(config_path))
 config._attn_implementation = attn
 tokenizer = AutoTokenizer.from_pretrained(str(Path(model_path_arg) if model_path_arg else config_path), trust_remote_code=True)
-model = LLaDA2MoeModelLM(config).float()
+if device == "npu":
+    import torch_npu  # noqa: F401
+
+    torch.npu.set_device(0)
+
+dtype = resolve_dtype(dtype_name)
+model = LLaDA2MoeModelLM(config).to(dtype=dtype)
 load_result = load_weights(model, Path(model_path_arg)) if model_path_arg else {"missing": [], "unexpected": []}
-model.train()
+model = model.to(device=device, dtype=dtype)
+model.eval()
 
 sample = read_sample(sample_path, sample_index)
 if "input_ids" in sample:
@@ -187,20 +206,25 @@ else:
 
 labels = input_ids.clone()
 labels[:, : input_ids.shape[1] // 2] = -100
+input_ids = input_ids.to(device)
+labels = labels.to(device)
 model.zero_grad(set_to_none=True)
-outputs = model(input_ids=input_ids, use_cache=False, output_router_logits=False)
-logits = outputs.logits.float()
-loss = F.cross_entropy(
-    logits[:, :-1, :].contiguous().view(-1, logits.shape[-1]),
-    labels[:, 1:].contiguous().view(-1),
-    ignore_index=-100,
-)
-loss.backward()
+with torch.enable_grad() if enable_backward else torch.no_grad():
+    outputs = model(input_ids=input_ids, use_cache=False, output_router_logits=False)
+    logits = outputs.logits.float()
+    loss = F.cross_entropy(
+        logits[:, :-1, :].contiguous().view(-1, logits.shape[-1]),
+        labels[:, 1:].contiguous().view(-1),
+        ignore_index=-100,
+    )
+    if enable_backward:
+        loss.backward()
 
 grads = []
-for param in model.parameters():
-    if param.grad is not None:
-        grads.append(param.grad.detach().float().cpu().reshape(-1))
+if enable_backward:
+    for param in model.parameters():
+        if param.grad is not None:
+            grads.append(param.grad.detach().float().cpu().reshape(-1))
 
 torch.save(
     {
@@ -208,6 +232,7 @@ torch.save(
         "logits": logits.detach().cpu(),
         "grad": torch.cat(grads) if grads else torch.empty(0),
         "load_result": load_result,
+        "backward": enable_backward,
     },
     output_path,
 )
@@ -228,6 +253,9 @@ def parse_args():
     parser.add_argument("--text-key", default="messages")
     parser.add_argument("--mask-token-id", type=int, default=156895)
     parser.add_argument("--attn", default="eager", choices=["eager", "sdpa"])
+    parser.add_argument("--device", default="cpu", choices=["cpu", "cuda", "npu"])
+    parser.add_argument("--dtype", default="float32", choices=["float32", "bfloat16", "float16"])
+    parser.add_argument("--backward", action="store_true")
     return parser.parse_args()
 
 
@@ -250,6 +278,9 @@ def run_worker(repo: Path, args, output_path: Path, mode: str):
             str(args.sample_index),
             args.text_key,
             str(args.mask_token_id),
+            args.device,
+            args.dtype,
+            str(args.backward),
         ],
         check=True,
         env=env,
@@ -294,6 +325,9 @@ def main():
             "sample_path": args.sample_path,
             "sample_index": args.sample_index,
             "attn": args.attn,
+            "device": args.device,
+            "dtype": args.dtype,
+            "backward": args.backward,
             "current_worker": current_log,
             "legacy_worker": legacy_log,
             "current_loss": float(current["loss"].item()),

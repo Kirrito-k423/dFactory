@@ -167,6 +167,7 @@ NPU fused_npu vs eager 对齐：
 
 - 该验证是 tiny 随机模型，不依赖未公开的 LLaDA2 权重。
 - 已完成迁移前旧代码与当前代码的 tiny eager parity；生产级真实权重精度对齐仍需旧 v0.1.2 环境、真实权重、固定数据切片和固定随机种子；当前仓库不包含这些资产。
+- 已确认 `inclusionAI/LLaDA2.0-mini-preview` 为非 gated 模型，包含 17 个文件、7 个 safetensors 分片，总权重约 30GB。2026-06-24 在远端 910B2 机器上分别尝试 Hugging Face 反向代理下载和 ModelScope 直连下载；两条链路均可访问，但吞吐不足以在本次工作窗口内完成全量权重获取。当前已保留可断点续传的下载目录和真实权重对齐脚本，拿到完整权重后可直接复跑下面的 harness。
 - transformers v5 会触发 `AttentionMaskConverter` deprecation warning，VeOmni logger 在该 warning 上有非阻塞格式化噪声，不影响结果。
 
 真实权重对齐 harness：
@@ -179,11 +180,13 @@ python scripts/run_llada2_real_precision_alignment.py \
   --model-path /path/to/LLaDA2.0-mini-preview-moe-merge \
   --sample-path /path/to/fixed_eval_sample.jsonl \
   --sample-index 0 \
-  --max-seq-len 256 \
-  --attn eager
+  --max-seq-len 128 \
+  --attn eager \
+  --device npu \
+  --dtype bfloat16
 ```
 
-该脚本会在旧代码路径中 monkeypatch 旧版 `fused_moe_forward` 为等价 PyTorch reference MoE，从而在没有旧 CUDA fused kernel 的环境里仍能比较同一真实权重和同一输入的 loss/logits/gradient。拿到真实权重和固定样本后，应把该结果作为生产级旧/新精度对齐的准入证据。
+该脚本会在旧代码路径中 monkeypatch 旧版 `fused_moe_forward` 为等价 PyTorch reference MoE，从而在没有旧 CUDA fused kernel 的环境里仍能比较同一真实权重和同一输入的 loss/logits。默认只做 forward 对齐以适配 16B 真实权重；需要梯度对齐时可额外传 `--backward`，但这对 HBM/内存要求显著更高。拿到真实权重和固定样本后，应把该结果作为生产级旧/新精度对齐的准入证据。
 
 ## 推荐下一步
 
