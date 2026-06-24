@@ -65,21 +65,31 @@ def run_modelscope(args, env):
     if not modelscope_bin:
         raise FileNotFoundError("modelscope CLI not found")
 
-    cmd = [
-        modelscope_bin,
-        "download",
-        "--model",
-        args.repo_id,
-        "--local_dir",
-        args.local_dir,
-        "--max-workers",
-        str(args.max_workers),
-    ]
+    if args.files:
+        cmd = [
+            modelscope_bin,
+            "download",
+            args.repo_id,
+            *args.files,
+            "--local_dir",
+            args.local_dir,
+            "--max-workers",
+            str(args.max_workers),
+        ]
+    else:
+        cmd = [
+            modelscope_bin,
+            "download",
+            "--model",
+            args.repo_id,
+            "--local_dir",
+            args.local_dir,
+            "--max-workers",
+            str(args.max_workers),
+        ]
     if args.revision:
         cmd.extend(["--revision", args.revision])
-    if args.files:
-        cmd.extend(args.files)
-    elif args.include:
+    if not args.files and args.include:
         cmd.append("--include")
         cmd.extend(args.include)
 
