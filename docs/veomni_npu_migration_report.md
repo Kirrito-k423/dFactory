@@ -188,7 +188,7 @@ python scripts/download_llada2_assets.py \
   --repo-id inclusionAI/LLaDA2.0-mini-preview \
   --local-dir /data/t00906153/modelscope_models/LLaDA2.0-mini-preview-extra \
   --max-workers 3 \
-  --include \
+  --files \
     model-00005-of-00007.safetensors \
     model-00006-of-00007.safetensors \
     model-00007-of-00007.safetensors

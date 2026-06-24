@@ -32,6 +32,12 @@ def parse_args():
         default=DEFAULT_INCLUDE,
         help="Snapshot allow patterns or exact filenames; use this to resume only missing shards.",
     )
+    parser.add_argument(
+        "--files",
+        nargs="*",
+        default=None,
+        help="Exact repo-relative files to download; preferred for targeted shard resumes.",
+    )
     parser.add_argument("--max-workers", type=int, default=4)
     parser.add_argument("--proxy", default=None, help="Optional HTTP(S) proxy URL.")
     parser.add_argument("--modelscope-bin", default=None, help="Path to modelscope CLI.")
@@ -71,7 +77,9 @@ def run_modelscope(args, env):
     ]
     if args.revision:
         cmd.extend(["--revision", args.revision])
-    if args.include:
+    if args.files:
+        cmd.extend(args.files)
+    elif args.include:
         cmd.append("--include")
         cmd.extend(args.include)
 
@@ -85,7 +93,8 @@ def run_huggingface(args, env):
     if args.dry_run:
         print(
             "Running: huggingface_hub.snapshot_download("
-            f"repo_id={args.repo_id!r}, local_dir={args.local_dir!r})"
+            f"repo_id={args.repo_id!r}, local_dir={args.local_dir!r}, "
+            f"allow_patterns={(args.files or args.include)!r})"
         )
         return
 
@@ -101,7 +110,7 @@ def run_huggingface(args, env):
             repo_id=args.repo_id,
             revision=args.revision,
             local_dir=args.local_dir,
-            allow_patterns=args.include,
+            allow_patterns=args.files or args.include,
             max_workers=args.max_workers,
         )
     finally:
