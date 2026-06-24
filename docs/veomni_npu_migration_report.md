@@ -173,11 +173,19 @@ NPU fused_npu vs eager 对齐：
 真实权重对齐 harness：
 
 ```bash
+python scripts/download_llada2_assets.py \
+  --backend modelscope \
+  --repo-id inclusionAI/LLaDA2.0-mini-preview \
+  --local-dir /data/t00906153/modelscope_models/LLaDA2.0-mini-preview \
+  --max-workers 4
+```
+
+```bash
 python scripts/run_llada2_real_precision_alignment.py \
   --legacy-repo /path/to/dFactory-v0.1.2 \
   --current-repo /path/to/dFactory-current \
   --config-path /path/to/configs/model_configs/llada2_mini \
-  --model-path /path/to/LLaDA2.0-mini-preview-moe-merge \
+  --model-path /data/t00906153/modelscope_models/LLaDA2.0-mini-preview \
   --sample-path /path/to/fixed_eval_sample.jsonl \
   --sample-index 0 \
   --max-seq-len 128 \
