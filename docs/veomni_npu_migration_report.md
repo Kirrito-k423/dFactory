@@ -16,11 +16,12 @@ dFactory 基于 8 个月前的 VeOmni 开发，主要耦合点集中在训练参
 - 训练脚本迁移到最新 `veomni.arguments`、`ops_implementation`、FSDP2、optimizer、dataloader、checkpoint API。
 - LLaDA2 MoE 适配新版 `fused_moe_forward` 签名，并支持 `fused_npu` backend 绑定。
 - 增加共享权重的 eager MoE fallback，用于基础精度对齐和无 fused kernel 环境验证。
+- 新增迁移前/迁移后 tiny eager parity 脚本，用旧 `v0.1.2` checkout 与当前代码做同权重 logits/loss/grad 对齐。
 - 禁用 NPU 环境下的 Liger RMSNorm / SwiGLU / RoPE 替换，避免 GPU-only kernel 误用。
 - 修复 transformers v5 下 `is_torch_fx_available` 和默认 RoPE registry 的兼容问题。
 - 新增 Ascend NPU 配置与 tiny smoke/对齐验证脚本。
 
-基础验证已通过：在 910B2 单卡上，tiny LLaDA2 MoE 的 `fused_npu` 路径明确绑定 `npu_fused_moe_forward`，相同权重/输入下与 eager baseline 的 loss/logits 差异为 0。
+基础验证已通过：在 910B2 单卡上，tiny LLaDA2 MoE 的 `fused_npu` 路径明确绑定 `npu_fused_moe_forward`，相同权重/输入下与 eager baseline 的 loss/logits 差异为 0。迁移前旧代码 eager 路径与当前代码 eager 路径在 tiny 模型上的 loss/logits/grad 差异也为 0。
 
 完整生产化建议按 3-5 周排期；若只要求“能在 NPU 上启动小规模 SFT 并通过基础 loss 对齐”，预计 1-2 周。
 
@@ -59,9 +60,10 @@ dFactory 基于 8 个月前的 VeOmni 开发，主要耦合点集中在训练参
 | --- | --- | --- |
 | 基础 API 迁移 | 子模块、注册、训练入口、YAML schema、启动脚本 | 3-5 人日，本次已完成主体 |
 | 单卡 NPU 功能验证 | tiny 模型、fused_npu/eager 对齐、基本 forward/backward | 1-2 人日，本次已完成基础验证 |
+| 旧代码 tiny parity | 旧 VeOmni v0.1.2 checkout vs 当前代码，同权重/输入 tiny eager loss/logits/grad 对齐 | 1 人日，本次已完成 |
 | 真实权重小步 SFT | 准备 LLaDA2 权重/Tokenizer/GSM8K 数据，单卡或 8 卡跑 1-10 step | 2-4 人日，受权重和数据可用性影响 |
 | 多卡 FSDP2/EP 验证 | 8 卡 FSDP2、可选 EP、checkpoint 保存/恢复、HF safetensor 导出 | 4-7 人日 |
-| 精度对齐 | 旧 VeOmni v0.1.2 baseline vs 新 VeOmni eager/fused，固定 seed/数据/权重，loss 曲线对齐 | 5-8 人日，必须有旧环境和真实权重 |
+| 生产级精度对齐 | 旧 VeOmni v0.1.2 baseline vs 新 VeOmni eager/fused，固定 seed/数据/权重，loss 曲线对齐 | 5-8 人日，必须有旧环境和真实权重 |
 | 性能优化 | NPU profiling，attention/RMSNorm/RoPE kernel 替换，batch/sequence 并行策略 | 5-10 人日 |
 | 文档和 CI | NPU README、smoke 脚本、最小 CI/手工验证矩阵 | 1-3 人日 |
 
@@ -114,6 +116,27 @@ CPU eager smoke：
 }
 ```
 
+迁移前旧代码 vs 当前代码 tiny eager parity：
+
+```json
+{
+  "attn": "eager",
+  "current_loss": 5.506927490234375,
+  "legacy_loss": 5.506927490234375,
+  "loss_abs_diff": 0.0,
+  "logits": {
+    "max_abs": 0.0,
+    "mean_abs": 0.0,
+    "max_rel": 0.0
+  },
+  "grad": {
+    "max_abs": 0.0,
+    "mean_abs": 0.0,
+    "max_rel": 0.0
+  }
+}
+```
+
 NPU fused_npu vs eager 对齐：
 
 ```json
@@ -143,7 +166,7 @@ NPU fused_npu vs eager 对齐：
 说明：
 
 - 该验证是 tiny 随机模型，不依赖未公开的 LLaDA2 权重。
-- 真实老版本精度对齐仍需旧 v0.1.2 环境、真实权重、固定数据切片和固定随机种子；当前仓库不包含这些资产。
+- 已完成迁移前旧代码与当前代码的 tiny eager parity；生产级真实权重精度对齐仍需旧 v0.1.2 环境、真实权重、固定数据切片和固定随机种子；当前仓库不包含这些资产。
 - transformers v5 会触发 `AttentionMaskConverter` deprecation warning，VeOmni logger 在该 warning 上有非阻塞格式化噪声，不影响结果。
 
 ## 推荐下一步
