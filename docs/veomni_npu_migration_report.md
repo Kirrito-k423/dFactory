@@ -207,6 +207,23 @@ python scripts/run_llada2_real_precision_alignment.py \
   --dtype bfloat16
 ```
 
+也可以用管线脚本把资产检查、样本生成和真实权重对齐串起来；加 `--wait` 后可作为下载完成后的自动 watcher：
+
+```bash
+python scripts/run_llada2_real_alignment_pipeline.py \
+  --legacy-repo /home/t00906153/dFactory-legacy-v012 \
+  --current-repo /home/t00906153/dFactory-veomni-npu \
+  --config-path /home/t00906153/dFactory-veomni-npu/configs/model_configs/llada2_mini \
+  --model-path /data/t00906153/modelscope_models/LLaDA2.0-mini-preview \
+  --sample-path /data/t00906153/llada2_alignment_sample.jsonl \
+  --result-path /data/t00906153/llada2_real_alignment_result.json \
+  --max-seq-len 128 \
+  --attn eager \
+  --device npu \
+  --dtype bfloat16 \
+  --wait
+```
+
 该脚本会在旧代码路径中 monkeypatch 旧版 `fused_moe_forward` 为等价 PyTorch reference MoE，从而在没有旧 CUDA fused kernel 的环境里仍能比较同一真实权重和同一输入的 loss/logits。默认只做 forward 对齐以适配 16B 真实权重；需要梯度对齐时可额外传 `--backward`，但这对 HBM/内存要求显著更高。拿到真实权重和固定样本后，应把该结果作为生产级旧/新精度对齐的准入证据。
 
 ## 推荐下一步
