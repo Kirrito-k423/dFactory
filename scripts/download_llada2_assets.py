@@ -66,37 +66,46 @@ def run_modelscope(args, env):
         raise FileNotFoundError("modelscope CLI not found")
 
     if args.files:
-        cmd = [
-            modelscope_bin,
-            "download",
-            args.repo_id,
-            *args.files,
-            "--local_dir",
-            args.local_dir,
-            "--max-workers",
-            str(args.max_workers),
-        ]
+        commands = []
+        for file_name in args.files:
+            cmd = [
+                modelscope_bin,
+                "download",
+                args.repo_id,
+                file_name,
+                "--local_dir",
+                args.local_dir,
+                "--max-workers",
+                str(args.max_workers),
+            ]
+            if args.revision:
+                cmd.extend(["--revision", args.revision])
+            commands.append(cmd)
     else:
-        cmd = [
-            modelscope_bin,
-            "download",
-            "--model",
-            args.repo_id,
-            "--local_dir",
-            args.local_dir,
-            "--max-workers",
-            str(args.max_workers),
+        commands = [
+            [
+                modelscope_bin,
+                "download",
+                "--model",
+                args.repo_id,
+                "--local_dir",
+                args.local_dir,
+                "--max-workers",
+                str(args.max_workers),
+            ]
         ]
-    if args.revision:
-        cmd.extend(["--revision", args.revision])
-    if not args.files and args.include:
-        cmd.append("--include")
-        cmd.extend(args.include)
+        if args.revision:
+            commands[0].extend(["--revision", args.revision])
+        if args.include:
+            commands[0].append("--include")
+            commands[0].extend(args.include)
 
-    print("Running:", " ".join(cmd))
+    for cmd in commands:
+        print("Running:", " ".join(cmd))
     if args.dry_run:
         return
-    subprocess.run(cmd, check=True, env=env)
+    for cmd in commands:
+        subprocess.run(cmd, check=True, env=env)
 
 
 def run_huggingface(args, env):
