@@ -169,10 +169,26 @@ NPU fused_npu vs eager 对齐：
 - 已完成迁移前旧代码与当前代码的 tiny eager parity；生产级真实权重精度对齐仍需旧 v0.1.2 环境、真实权重、固定数据切片和固定随机种子；当前仓库不包含这些资产。
 - transformers v5 会触发 `AttentionMaskConverter` deprecation warning，VeOmni logger 在该 warning 上有非阻塞格式化噪声，不影响结果。
 
+真实权重对齐 harness：
+
+```bash
+python scripts/run_llada2_real_precision_alignment.py \
+  --legacy-repo /path/to/dFactory-v0.1.2 \
+  --current-repo /path/to/dFactory-current \
+  --config-path /path/to/configs/model_configs/llada2_mini \
+  --model-path /path/to/LLaDA2.0-mini-preview-moe-merge \
+  --sample-path /path/to/fixed_eval_sample.jsonl \
+  --sample-index 0 \
+  --max-seq-len 256 \
+  --attn eager
+```
+
+该脚本会在旧代码路径中 monkeypatch 旧版 `fused_moe_forward` 为等价 PyTorch reference MoE，从而在没有旧 CUDA fused kernel 的环境里仍能比较同一真实权重和同一输入的 loss/logits/gradient。拿到真实权重和固定样本后，应把该结果作为生产级旧/新精度对齐的准入证据。
+
 ## 推荐下一步
 
 1. 准备真实 LLaDA2 mini/flash 权重、tokenizer 与 GSM8K 或内部 SFT 数据，在单卡 NPU 上跑 `max_steps=1`。
-2. 用相同 batch 固定 seed 跑旧 v0.1.2 与新 eager，记录 loss/logits 差异。
+2. 使用 `scripts/run_llada2_real_precision_alignment.py` 对相同 batch 固定 seed 跑旧 v0.1.2 与新 eager，记录 loss/logits/grad 差异。
 3. 将新 eager baseline 与 `fused_npu` 对齐，阈值建议：loss 相对差 < 1%，关键 logits max_abs/mean_abs 结合 dtype 放宽评估。
 4. 扩展到 8 卡 FSDP2，验证 checkpoint save/load 与 HF safetensor 导出。
 5. 若性能不足，再投入 LLaDA2 attention/RMSNorm/RoPE 的 NPU OpSlot 化。
@@ -183,3 +199,5 @@ NPU fused_npu vs eager 对齐：
 - [VeOmni Ascend NPU get started](https://github.com/ByteDance-Seed/VeOmni/blob/main/docs/hardware_support/get_started_npu.md)
 - [VeOmni NPU typical usage](https://github.com/ByteDance-Seed/VeOmni/blob/main/docs/hardware_support/typical_usage.md)
 - [VeOmni NPU FAQ](https://github.com/ByteDance-Seed/VeOmni/blob/main/docs/hardware_support/FAQ.md)
+- [LLaDA2.0 mini preview weights](https://huggingface.co/inclusionAI/LLaDA2.0-mini-preview)
+- [LLaDA2.0 flash preview weights](https://huggingface.co/inclusionAI/LLaDA2.0-flash-preview)
