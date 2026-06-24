@@ -181,6 +181,12 @@ python scripts/download_llada2_assets.py \
 ```
 
 ```bash
+python scripts/check_llada2_assets.py \
+  --model-path /data/t00906153/modelscope_models/LLaDA2.0-mini-preview \
+  --validate-safetensors
+```
+
+```bash
 python scripts/create_llada2_alignment_sample.py \
   --model-path /data/t00906153/modelscope_models/LLaDA2.0-mini-preview \
   --output-path /data/t00906153/llada2_alignment_sample.jsonl \
