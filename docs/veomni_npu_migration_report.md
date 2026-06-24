@@ -194,6 +194,8 @@ python scripts/download_llada2_assets.py \
     model-00007-of-00007.safetensors
 ```
 
+对 ModelScope 后端，`--files` 会逐个 exact file 调用下载命令。该路径比一次性传多个大分片更可靠，并可保留每个分片的断点续传临时文件。
+
 ```bash
 python scripts/check_llada2_assets.py \
   --model-path /data/t00906153/modelscope_models/LLaDA2.0-mini-preview \
