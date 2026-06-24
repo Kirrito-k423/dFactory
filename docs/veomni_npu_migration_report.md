@@ -180,6 +180,20 @@ python scripts/download_llada2_assets.py \
   --max-workers 4
 ```
 
+慢网或中断场景下，可只补指定缺失分片，避免重新扫描/下载全部资产。例如：
+
+```bash
+python scripts/download_llada2_assets.py \
+  --backend modelscope \
+  --repo-id inclusionAI/LLaDA2.0-mini-preview \
+  --local-dir /data/t00906153/modelscope_models/LLaDA2.0-mini-preview-extra \
+  --max-workers 3 \
+  --include \
+    model-00005-of-00007.safetensors \
+    model-00006-of-00007.safetensors \
+    model-00007-of-00007.safetensors
+```
+
 ```bash
 python scripts/check_llada2_assets.py \
   --model-path /data/t00906153/modelscope_models/LLaDA2.0-mini-preview \

@@ -26,7 +26,12 @@ def parse_args():
     parser.add_argument("--local-dir", required=True, help="Directory to place the downloaded snapshot.")
     parser.add_argument("--backend", default="auto", choices=["auto", "modelscope", "huggingface"])
     parser.add_argument("--revision", default=None)
-    parser.add_argument("--include", nargs="*", default=DEFAULT_INCLUDE)
+    parser.add_argument(
+        "--include",
+        nargs="*",
+        default=DEFAULT_INCLUDE,
+        help="Snapshot allow patterns or exact filenames; use this to resume only missing shards.",
+    )
     parser.add_argument("--max-workers", type=int, default=4)
     parser.add_argument("--proxy", default=None, help="Optional HTTP(S) proxy URL.")
     parser.add_argument("--modelscope-bin", default=None, help="Path to modelscope CLI.")
