@@ -224,7 +224,7 @@ python scripts/run_llada2_real_alignment_pipeline.py \
   --wait
 ```
 
-该脚本会在旧代码路径中 monkeypatch 旧版 `fused_moe_forward` 为等价 PyTorch reference MoE，从而在没有旧 CUDA fused kernel 的环境里仍能比较同一真实权重和同一输入的 loss/logits。默认只做 forward 对齐以适配 16B 真实权重；需要梯度对齐时可额外传 `--backward`，但这对 HBM/内存要求显著更高。拿到真实权重和固定样本后，应把该结果作为生产级旧/新精度对齐的准入证据。
+该脚本会在旧代码路径中 monkeypatch 旧版 `fused_moe_forward` 为等价 PyTorch reference MoE，从而在没有旧 CUDA fused kernel 的环境里仍能比较同一真实权重和同一输入的 loss/logits。真实权重加载按 safetensors 分片流式执行，避免先合并完整 16B state dict 带来的额外 CPU 内存峰值。默认只做 forward 对齐以适配 16B 真实权重；需要梯度对齐时可额外传 `--backward`，但这对 HBM/内存要求显著更高。拿到真实权重和固定样本后，应把该结果作为生产级旧/新精度对齐的准入证据。
 
 ## 推荐下一步
 

@@ -155,19 +155,31 @@ def load_weights(model, model_path: Path):
     except Exception as exc:
         raise RuntimeError("safetensors is required for real-weight alignment") from exc
 
-    state = {}
     index_path = model_path / "model.safetensors.index.json"
     if index_path.exists():
         weight_map = json.loads(index_path.read_text())["weight_map"]
-        for shard in sorted(set(weight_map.values())):
-            state.update(load_file(str(model_path / shard), device="cpu"))
+        shards = sorted(set(weight_map.values()))
     elif (model_path / "model.safetensors").exists():
-        state.update(load_file(str(model_path / "model.safetensors"), device="cpu"))
+        shards = ["model.safetensors"]
     else:
         raise FileNotFoundError(f"No safetensors weights found under {model_path}")
 
-    result = model.load_state_dict(state, strict=False)
-    return {"missing": list(result.missing_keys), "unexpected": list(result.unexpected_keys)}
+    model_keys = set(model.state_dict().keys())
+    loaded_keys = set()
+    unexpected_keys = set()
+    for shard in shards:
+        shard_state = load_file(str(model_path / shard), device="cpu")
+        loaded_keys.update(key for key in shard_state.keys() if key in model_keys)
+        unexpected_keys.update(key for key in shard_state.keys() if key not in model_keys)
+        result = model.load_state_dict(shard_state, strict=False)
+        unexpected_keys.update(result.unexpected_keys)
+        del shard_state
+
+    return {
+        "missing": sorted(model_keys - loaded_keys),
+        "unexpected": sorted(unexpected_keys),
+        "shards_loaded": shards,
+    }
 
 
 config = LLaDA2MoeConfig.from_pretrained(str(config_path))
