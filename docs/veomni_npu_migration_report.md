@@ -181,12 +181,19 @@ python scripts/download_llada2_assets.py \
 ```
 
 ```bash
+python scripts/create_llada2_alignment_sample.py \
+  --model-path /data/t00906153/modelscope_models/LLaDA2.0-mini-preview \
+  --output-path /data/t00906153/llada2_alignment_sample.jsonl \
+  --max-length 128
+```
+
+```bash
 python scripts/run_llada2_real_precision_alignment.py \
   --legacy-repo /path/to/dFactory-v0.1.2 \
   --current-repo /path/to/dFactory-current \
   --config-path /path/to/configs/model_configs/llada2_mini \
   --model-path /data/t00906153/modelscope_models/LLaDA2.0-mini-preview \
-  --sample-path /path/to/fixed_eval_sample.jsonl \
+  --sample-path /data/t00906153/llada2_alignment_sample.jsonl \
   --sample-index 0 \
   --max-seq-len 128 \
   --attn eager \
