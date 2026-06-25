@@ -9,7 +9,7 @@
 | 路线 | 定位 | 工作量 | 3 人并行排期 | 判断 |
 | --- | --- | ---: | ---: | --- |
 | 路线 A：继续维护 dFactory，适配最新 VeOmni + NPU | 内部兼容与短期交付路径 | 6 人周 | 2 周 | 投入较小，能最快拿到可训练原型，但客户仍面对 dFactory fork 和后续双仓维护 |
-| 路线 B：在 VeOmni 原仓原生支持 LLaDA 系列 | 客户主推路径 | 10 人周 | 3.5 周 | 投入更高，但能把模型、trainer、NPU 配置和权重自动化沉到 VeOmni 原仓，长期维护成本更低 |
+| 路线 B：在 VeOmni 原仓原生支持 LLaDA 系列 | 客户主推路径 | 8 人周 | 3 周 | 投入高于路线 A，但能把模型、trainer、NPU 配置和权重自动化沉到 VeOmni 原仓，长期维护成本更低 |
 
 建议：短期用路线 A 作为兼容验证和风险收敛基线；对客户主推路线 B。路线 B 比路线 A 更耗时是合理的，因为它不是简单迁移 dFactory，而是把 LLaDA 系列做成 VeOmni 原仓的一等训练能力。
 
@@ -40,12 +40,11 @@
 | LLaDA 模型原仓接入 | 将 LLaDA2 mini/flash 的 config、modeling、registry、ops preset 按 VeOmni 原仓风格接入 | 1.5 人周 |
 | MDM / block diffusion trainer | 将 MDM SFT transform、block diffusion mask、loss、confidence/consistency loss 接入 VeOmni trainer 或新增 LLaDA trainer | 1.5 人周 |
 | 权重加载/导出自动化 | 在 VeOmni loader/exporter 中自动处理 HF separate-expert 与 grouped expert 的映射；保留离线工具即可 | 1 人周 |
-| NPU 训练配置与算子适配 | 提供 LLaDA GPU/NPU YAML、接入 fused_npu MoE，处理 Liger/GPU-only op、RMSNorm/RoPE/CrossEntropy fallback | 1.5 人周 |
 | 多卡 FSDP2/SP/EP 穿刺 | 原仓入口下跑通真实权重/真实数据 8 卡 NPU，覆盖 FSDP2、SP、EP、checkpoint 和恢复训练 | 2 人周 |
-| 精度对齐与基础性能优化 | 与 dFactory baseline 对齐 loss/logits，并完成首轮 NPU profiling 和关键瓶颈调优 | 2 人周 |
+| 精度对齐与基础性能优化 | 与 dFactory baseline 对齐 loss/logits，并完成 NPU YAML、fused_npu MoE、fallback op 和首轮 profiling 调优 | 1.5 人周 |
 | 最小文档与准入收口 | 补配置示例、运行命令、资产检查和必要 review 修改；不按完整 CI 产品化估算 | 0.5 人周 |
 
-路线 B 总计：10 人周。
+路线 B 总计：8 人周。
 
 主要风险：需要在 VeOmni 原仓保持模型、trainer、checkpoint、ops 和现有模型矩阵的兼容性；review 和上游风格收口也会消耗额外时间。
 
