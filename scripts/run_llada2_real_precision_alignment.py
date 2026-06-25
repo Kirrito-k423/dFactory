@@ -89,20 +89,15 @@ def read_sample(path: Path, index: int):
 
 
 def reference_fused_moe_forward(module, num_experts, routing_weights, selected_experts, hidden_states, fc1_1_weight, fc1_2_weight, fc2_weight):
-    output = torch.zeros(hidden_states.shape, dtype=routing_weights.dtype, device=hidden_states.device)
-    act_fn = getattr(module, "act_fn", F.silu)
+    del fc1_1_weight, fc1_2_weight, fc2_weight
+    flat_selected = selected_experts.view(-1)
+    expanded_hidden = hidden_states.repeat_interleave(selected_experts.shape[-1], dim=0)
+    expert_output = torch.empty_like(expanded_hidden)
     for expert_idx in range(num_experts):
-        token_mask = selected_experts == expert_idx
-        if not token_mask.any():
-            continue
-        token_indices, topk_indices = torch.where(token_mask)
-        expert_input = hidden_states[token_indices]
-        gate = F.linear(expert_input, fc1_1_weight[expert_idx])
-        up = F.linear(expert_input, fc1_2_weight[expert_idx])
-        expert_output = F.linear(act_fn(gate) * up, fc2_weight[expert_idx])
-        weighted_output = expert_output * routing_weights[token_indices, topk_indices].unsqueeze(-1)
-        output.index_add_(0, token_indices, weighted_output.to(output.dtype))
-    return output.to(hidden_states.dtype)
+        token_mask = flat_selected == expert_idx
+        if token_mask.any():
+            expert_output[token_mask] = module(expanded_hidden[token_mask], expert_idx=expert_idx)
+    return (expert_output.view(*routing_weights.shape, -1) * routing_weights.unsqueeze(-1)).sum(dim=1).to(hidden_states.dtype)
 
 
 install_transformers_compat()
