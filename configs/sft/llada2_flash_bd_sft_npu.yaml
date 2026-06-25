@@ -4,11 +4,11 @@ model:
   tokenizer_path: ./LLaDA2.0-flash-preview-moe-merge
   ops_implementation:
     attn_implementation: sdpa
-    moe_implementation: fused_triton
-    cross_entropy_loss_implementation: eager
-    rms_norm_implementation: eager
+    moe_implementation: fused_npu
+    cross_entropy_loss_implementation: npu
+    rms_norm_implementation: npu
     swiglu_mlp_implementation: eager
-    rotary_pos_emb_implementation: eager
+    rotary_pos_emb_implementation: npu
     rotary_pos_emb_vision_implementation: eager
     load_balancing_loss_implementation: eager
     rms_norm_gated_implementation: eager
@@ -67,7 +67,7 @@ train:
     enable: true
     enable_reentrant: false
   checkpoint:
-    output_dir: ./llada2_flash_bd_sft_outputs
+    output_dir: ./llada2_flash_bd_sft_npu_outputs
     manager: dcp
     load_path: null
     save_epochs: 1
