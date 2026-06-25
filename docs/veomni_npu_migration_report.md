@@ -45,7 +45,7 @@ dFactory 基于 8 个月前的 VeOmni 开发，主要耦合点集中在训练参
 
 | 算子/路径 | VeOmni 最新能力 | LLaDA2 当前状态 | Gap 与建议 |
 | --- | --- | --- | --- |
-| MoE Group GEMM | 支持 `fused_npu`，底层使用 `torch_npu` MoE permute/grouped matmul/unpermute | 已接入并验证 tiny forward/backward；真实 LLaDA2 权重旧/新 forward parity 为 0 diff | 需要继续验证 EP>1、多卡 FSDP2 下的 routing 和性能 |
+| MoE Group GEMM | 支持 `fused_npu`，底层使用 `torch_npu` MoE permute/grouped matmul/unpermute | 已接入并验证 tiny forward/backward；真实 LLaDA2 权重旧/新 forward parity 为 0 diff；`ep_size=2` tiny 新版本功能验证通过 | 仍需验证真实权重 EP、多卡 FSDP2 下的 routing、checkpoint 和性能 |
 | Attention | VeOmni 文档推荐 NPU 使用 FA/SDPA/CANN 路径 | LLaDA2 自定义 attention 仅支持 `eager` / `sdpa` / `flex_attention` | 无 LLaDA2 专属 flash_attention_2/sequence-parallel patch；生产性能优化需补 LLaDA2 attention patchgen |
 | RMSNorm | VeOmni 有 NPU RMSNorm kernel | LLaDA2 使用本地 RMSNorm；NPU 下已避免 Liger | 功能可跑，性能未用 NPU RMSNorm；建议后续接入 OpSlot 或替换为 VeOmni NPU RMSNorm |
 | RoPE | VeOmni 有 NPU RoPE kernel | LLaDA2 使用本地 partial rotary；已补 transformers v5 default RoPE fallback | 功能可跑，性能未用 NPU RoPE；建议补 partial rotary 的 NPU kernel 适配 |
