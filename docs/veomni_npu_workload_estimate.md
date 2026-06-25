@@ -4,12 +4,12 @@
 
 ## 一页结论
 
-本报告只做工作量评估。估算口径从“完整生产化交付”调整为“穿刺出可评审的大规模训练原型”：真实权重、真实数据、多卡 NPU、FSDP2/SP/EP 主链路、旧版本精度对齐、基础性能优化。所有工作量统一用人周表达，按每人每周 5 个工作日折算。单卡 NPU 功能验证、旧代码 tiny parity、真实权重小步 SFT 不作为单独工作项。
+本报告只做工作量评估。估算口径从“完整生产化交付”调整为“穿刺出可评审的大规模训练原型”：真实权重、真实数据、多卡 NPU、FSDP2/SP/EP 主链路、旧版本精度对齐、基础性能优化。所有工作量统一用人周表达，并按 0.5 人周作为最小估算粒度归整。单卡 NPU 功能验证、旧代码 tiny parity、真实权重小步 SFT 不作为单独工作项。
 
 | 路线 | 定位 | 工作量 | 3 人并行排期 | 判断 |
 | --- | --- | ---: | ---: | --- |
-| 路线 A：继续维护 dFactory，适配最新 VeOmni + NPU | 内部兼容与短期交付路径 | 5.8 人周 | 2.0 周 | 投入较小，能最快拿到可训练原型，但客户仍面对 dFactory fork 和后续双仓维护 |
-| 路线 B：在 VeOmni 原仓原生支持 LLaDA 系列 | 客户主推路径 | 9.6 人周 | 3.2 周 | 投入更高，但能把模型、trainer、NPU 配置和权重自动化沉到 VeOmni 原仓，长期维护成本更低 |
+| 路线 A：继续维护 dFactory，适配最新 VeOmni + NPU | 内部兼容与短期交付路径 | 6 人周 | 2 周 | 投入较小，能最快拿到可训练原型，但客户仍面对 dFactory fork 和后续双仓维护 |
+| 路线 B：在 VeOmni 原仓原生支持 LLaDA 系列 | 客户主推路径 | 10 人周 | 3.5 周 | 投入更高，但能把模型、trainer、NPU 配置和权重自动化沉到 VeOmni 原仓，长期维护成本更低 |
 
 建议：短期用路线 A 作为兼容验证和风险收敛基线；对客户主推路线 B。路线 B 比路线 A 更耗时是合理的，因为它不是简单迁移 dFactory，而是把 LLaDA 系列做成 VeOmni 原仓的一等训练能力。
 
@@ -19,15 +19,15 @@
 
 | 关键工作 | 交付边界 | 估算 |
 | --- | --- | ---: |
-| 最新 VeOmni API 迁移 | 模型注册、参数解析、dataloader、optimizer、checkpoint、ops config 能在 dFactory 入口跑通 | 0.8 人周 |
-| 多卡 NPU 训练主链路 | 真实权重/真实数据下跑通 8 卡 NPU FSDP2 训练、保存、恢复和 HF safetensor 导出 | 1.2 人周 |
-| SP 最小可用穿刺 | 处理 block diffusion mask、attention/RoPE、sequence 切分与 loss 对齐问题 | 0.8 人周 |
-| EP 最小可用穿刺 | 处理 MoE expert routing、fused_npu dispatch、expert 参数分片与 checkpoint 恢复 | 1.0 人周 |
-| 精度对齐 | 固定 seed、真实权重和真实数据切片，对齐旧 dFactory/老 VeOmni baseline 的 loss 曲线和关键 logits | 1.0 人周 |
-| 基础性能优化 | 做 NPU profiling，优先处理 MoE、attention、RMSNorm/RoPE、通信与显存瓶颈 | 0.8 人周 |
-| 权重转换自动化与最小文档 | 将现有 merge/split 流程脚本化、加校验，补最小运行说明；不展开完整产品化 | 0.2 人周 |
+| 最新 VeOmni API 迁移 | 模型注册、参数解析、dataloader、optimizer、checkpoint、ops config 能在 dFactory 入口跑通 | 1 人周 |
+| 多卡 NPU 训练主链路 | 真实权重/真实数据下跑通 8 卡 NPU FSDP2 训练、保存、恢复和 HF safetensor 导出 | 1 人周 |
+| SP 最小可用穿刺 | 处理 block diffusion mask、attention/RoPE、sequence 切分与 loss 对齐问题 | 0.5 人周 |
+| EP 最小可用穿刺 | 处理 MoE expert routing、fused_npu dispatch、expert 参数分片与 checkpoint 恢复 | 1 人周 |
+| 精度对齐 | 固定 seed、真实权重和真实数据切片，对齐旧 dFactory/老 VeOmni baseline 的 loss 曲线和关键 logits | 1 人周 |
+| 基础性能优化 | 做 NPU profiling，优先处理 MoE、attention、RMSNorm/RoPE、通信与显存瓶颈 | 1 人周 |
+| 权重转换自动化与最小文档 | 将现有 merge/split 流程脚本化、加校验，补最小运行说明；不展开完整产品化 | 0.5 人周 |
 
-路线 A 总计：5.8 人周。
+路线 A 总计：6 人周。
 
 主要风险：dFactory 仍跟随 VeOmni API 漂移；权重形态、NPU ops、SP/EP 组合验证会继续落在 dFactory fork 内维护。
 
@@ -37,15 +37,15 @@
 
 | 关键工作 | 交付边界 | 估算 |
 | --- | --- | ---: |
-| LLaDA 模型原仓接入 | 将 LLaDA2 mini/flash 的 config、modeling、registry、ops preset 按 VeOmni 原仓风格接入 | 1.4 人周 |
-| MDM / block diffusion trainer | 将 MDM SFT transform、block diffusion mask、loss、confidence/consistency loss 接入 VeOmni trainer 或新增 LLaDA trainer | 1.6 人周 |
-| 权重加载/导出自动化 | 在 VeOmni loader/exporter 中自动处理 HF separate-expert 与 grouped expert 的映射；保留离线工具即可 | 1.0 人周 |
-| NPU 训练配置与算子适配 | 提供 LLaDA GPU/NPU YAML、接入 fused_npu MoE，处理 Liger/GPU-only op、RMSNorm/RoPE/CrossEntropy fallback | 1.2 人周 |
-| 多卡 FSDP2/SP/EP 穿刺 | 原仓入口下跑通真实权重/真实数据 8 卡 NPU，覆盖 FSDP2、SP、EP、checkpoint 和恢复训练 | 2.0 人周 |
-| 精度对齐与基础性能优化 | 与 dFactory baseline 对齐 loss/logits，并完成首轮 NPU profiling 和关键瓶颈调优 | 1.6 人周 |
-| 最小文档与准入收口 | 补配置示例、运行命令、资产检查和必要 review 修改；不按完整 CI 产品化估算 | 0.8 人周 |
+| LLaDA 模型原仓接入 | 将 LLaDA2 mini/flash 的 config、modeling、registry、ops preset 按 VeOmni 原仓风格接入 | 1.5 人周 |
+| MDM / block diffusion trainer | 将 MDM SFT transform、block diffusion mask、loss、confidence/consistency loss 接入 VeOmni trainer 或新增 LLaDA trainer | 1.5 人周 |
+| 权重加载/导出自动化 | 在 VeOmni loader/exporter 中自动处理 HF separate-expert 与 grouped expert 的映射；保留离线工具即可 | 1 人周 |
+| NPU 训练配置与算子适配 | 提供 LLaDA GPU/NPU YAML、接入 fused_npu MoE，处理 Liger/GPU-only op、RMSNorm/RoPE/CrossEntropy fallback | 1.5 人周 |
+| 多卡 FSDP2/SP/EP 穿刺 | 原仓入口下跑通真实权重/真实数据 8 卡 NPU，覆盖 FSDP2、SP、EP、checkpoint 和恢复训练 | 2 人周 |
+| 精度对齐与基础性能优化 | 与 dFactory baseline 对齐 loss/logits，并完成首轮 NPU profiling 和关键瓶颈调优 | 2 人周 |
+| 最小文档与准入收口 | 补配置示例、运行命令、资产检查和必要 review 修改；不按完整 CI 产品化估算 | 0.5 人周 |
 
-路线 B 总计：9.6 人周。
+路线 B 总计：10 人周。
 
 主要风险：需要在 VeOmni 原仓保持模型、trainer、checkpoint、ops 和现有模型矩阵的兼容性；review 和上游风格收口也会消耗额外时间。
 
