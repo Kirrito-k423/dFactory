@@ -202,33 +202,45 @@ def load_weights(model, model_path: Path):
         del shard_state
 
     if grouped_expert_keys:
-        expert_locations = {}
+        layer_locations = {}
+        grouped_keys_by_layer = {}
         for key, shard in weight_map.items():
             mapped = grouped_key_for_checkpoint_key(key)
             if mapped is None:
                 continue
             grouped_key, expert_id = mapped
-            expert_locations.setdefault(grouped_key, {}).setdefault(shard, []).append((expert_id, key))
+            layer_key = grouped_key.rsplit(".", 1)[0]
+            grouped_keys_by_layer.setdefault(layer_key, set()).add(grouped_key)
+            layer_locations.setdefault(layer_key, {}).setdefault(shard, []).append((grouped_key, expert_id, key))
 
-        for grouped_key in sorted(grouped_expert_keys):
-            locations = expert_locations.get(grouped_key, {})
+        for layer_key in sorted(grouped_keys_by_layer):
+            locations = layer_locations.get(layer_key, {})
             if not locations:
                 continue
-            grouped_tensor = torch.empty_like(model_state[grouped_key], device="cpu")
-            seen_experts = set()
+            grouped_tensors = {
+                grouped_key: torch.empty_like(model_state[grouped_key], device="cpu")
+                for grouped_key in sorted(grouped_keys_by_layer[layer_key])
+            }
+            seen_experts = {grouped_key: set() for grouped_key in grouped_tensors}
             for shard, entries in sorted(locations.items()):
                 shard_state = load_file(str(model_path / shard), device="cpu")
-                for expert_id, checkpoint_key in entries:
+                for grouped_key, expert_id, checkpoint_key in entries:
                     if checkpoint_key not in shard_state:
                         continue
+                    grouped_tensor = grouped_tensors[grouped_key]
                     grouped_tensor[expert_id].copy_(shard_state[checkpoint_key].to(grouped_tensor.dtype))
-                    seen_experts.add(expert_id)
+                    seen_experts[grouped_key].add(expert_id)
                 del shard_state
-            if len(seen_experts) == grouped_tensor.shape[0]:
-                result = model.load_state_dict({grouped_key: grouped_tensor}, strict=False)
-                loaded_keys.add(grouped_key)
+            layer_state = {
+                grouped_key: grouped_tensor
+                for grouped_key, grouped_tensor in grouped_tensors.items()
+                if len(seen_experts[grouped_key]) == grouped_tensor.shape[0]
+            }
+            if layer_state:
+                result = model.load_state_dict(layer_state, strict=False)
+                loaded_keys.update(layer_state.keys())
                 unexpected_keys.update(result.unexpected_keys)
-            del grouped_tensor
+            del grouped_tensors
 
     return {
         "missing": sorted(model_keys - loaded_keys),
