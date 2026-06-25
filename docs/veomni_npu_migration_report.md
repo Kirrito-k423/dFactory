@@ -1,6 +1,6 @@
 # dFactory 兼容最新 VeOmni 与 Ascend NPU 迁移评估报告
 
-日期：2026-06-24  
+日期：2026-06-25
 仓库：[inclusionAI/dFactory](https://github.com/inclusionAI/dFactory)  
 旧 VeOmni 基线：`600fe6d7442392fd3ddefad4b6c8d3c0002fed1c`（`v0.1.2`）  
 目标 VeOmni 基线：`8ca09d7c87f06ee7c0f69b0ca0c9e9a6b37f2280`（`main`，`[model, ci] fix: GPT-OSS e2e parametrization (#861)`）
@@ -20,8 +20,9 @@ dFactory 基于 8 个月前的 VeOmni 开发，主要耦合点集中在训练参
 - 禁用 NPU 环境下的 Liger RMSNorm / SwiGLU / RoPE 替换，避免 GPU-only kernel 误用。
 - 修复 transformers v5 下 `is_torch_fx_available` 和默认 RoPE registry 的兼容问题。
 - 新增 Ascend NPU 配置与 tiny smoke/对齐验证脚本。
+- 完成 LLaDA2.0 mini preview 真实权重旧代码/当前代码 NPU bf16 forward 对齐，7 个 safetensors 分片完整加载，loss/logits 差异为 0。
 
-基础验证已通过：在 910B2 单卡上，tiny LLaDA2 MoE 的 `fused_npu` 路径明确绑定 `npu_fused_moe_forward`，相同权重/输入下与 eager baseline 的 loss/logits 差异为 0。迁移前旧代码 eager 路径与当前代码 eager 路径在 tiny 模型上的 loss/logits/grad 差异也为 0。
+基础验证和真实权重精度对齐已通过：在 910B2 单卡上，tiny LLaDA2 MoE 的 `fused_npu` 路径明确绑定 `npu_fused_moe_forward`，相同权重/输入下与 eager baseline 的 loss/logits 差异为 0。迁移前旧代码 eager 路径与当前代码 eager 路径在 tiny 模型上的 loss/logits/grad 差异也为 0。使用 `inclusionAI/LLaDA2.0-mini-preview` 真实 7 分片权重、固定样本、NPU bf16 forward-only 对齐时，旧代码与当前代码的 loss/logits 差异同样为 0。
 
 完整生产化建议按 3-5 周排期；若只要求“能在 NPU 上启动小规模 SFT 并通过基础 loss 对齐”，预计 1-2 周。
 
@@ -44,7 +45,7 @@ dFactory 基于 8 个月前的 VeOmni 开发，主要耦合点集中在训练参
 
 | 算子/路径 | VeOmni 最新能力 | LLaDA2 当前状态 | Gap 与建议 |
 | --- | --- | --- | --- |
-| MoE Group GEMM | 支持 `fused_npu`，底层使用 `torch_npu` MoE permute/grouped matmul/unpermute | 已接入并验证 tiny forward/backward | 需要继续验证真实 LLaDA2 权重、EP>1、多卡 FSDP2 下的 routing 和性能 |
+| MoE Group GEMM | 支持 `fused_npu`，底层使用 `torch_npu` MoE permute/grouped matmul/unpermute | 已接入并验证 tiny forward/backward；真实 LLaDA2 权重旧/新 forward parity 为 0 diff | 需要继续验证 EP>1、多卡 FSDP2 下的 routing 和性能 |
 | Attention | VeOmni 文档推荐 NPU 使用 FA/SDPA/CANN 路径 | LLaDA2 自定义 attention 仅支持 `eager` / `sdpa` / `flex_attention` | 无 LLaDA2 专属 flash_attention_2/sequence-parallel patch；生产性能优化需补 LLaDA2 attention patchgen |
 | RMSNorm | VeOmni 有 NPU RMSNorm kernel | LLaDA2 使用本地 RMSNorm；NPU 下已避免 Liger | 功能可跑，性能未用 NPU RMSNorm；建议后续接入 OpSlot 或替换为 VeOmni NPU RMSNorm |
 | RoPE | VeOmni 有 NPU RoPE kernel | LLaDA2 使用本地 partial rotary；已补 transformers v5 default RoPE fallback | 功能可跑，性能未用 NPU RoPE；建议补 partial rotary 的 NPU kernel 适配 |
@@ -63,7 +64,7 @@ dFactory 基于 8 个月前的 VeOmni 开发，主要耦合点集中在训练参
 | 旧代码 tiny parity | 旧 VeOmni v0.1.2 checkout vs 当前代码，同权重/输入 tiny eager loss/logits/grad 对齐 | 1 人日，本次已完成 |
 | 真实权重小步 SFT | 准备 LLaDA2 权重/Tokenizer/GSM8K 数据，单卡或 8 卡跑 1-10 step | 2-4 人日，受权重和数据可用性影响 |
 | 多卡 FSDP2/EP 验证 | 8 卡 FSDP2、可选 EP、checkpoint 保存/恢复、HF safetensor 导出 | 4-7 人日 |
-| 生产级精度对齐 | 旧 VeOmni v0.1.2 baseline vs 新 VeOmni eager/fused，固定 seed/数据/权重，loss 曲线对齐 | 5-8 人日，必须有旧环境和真实权重 |
+| 生产级精度对齐 | 旧 VeOmni v0.1.2 baseline vs 新 VeOmni eager/fused，固定 seed/数据/权重，loss 曲线对齐 | 5-8 人日；本次已完成真实权重单样本 forward 对齐，完整 loss 曲线和真实权重 backward 仍需后续小步训练验证 |
 | 性能优化 | NPU profiling，attention/RMSNorm/RoPE kernel 替换，batch/sequence 并行策略 | 5-10 人日 |
 | 文档和 CI | NPU README、smoke 脚本、最小 CI/手工验证矩阵 | 1-3 人日 |
 
@@ -166,9 +167,35 @@ NPU fused_npu vs eager 对齐：
 说明：
 
 - 该验证是 tiny 随机模型，不依赖未公开的 LLaDA2 权重。
-- 已完成迁移前旧代码与当前代码的 tiny eager parity；生产级真实权重精度对齐仍需旧 v0.1.2 环境、真实权重、固定数据切片和固定随机种子；当前仓库不包含这些资产。
-- 已确认 `inclusionAI/LLaDA2.0-mini-preview` 为非 gated 模型，包含 17 个文件、7 个 safetensors 分片，总权重约 30GB。2026-06-24 在远端 910B2 机器上分别尝试 Hugging Face 反向代理下载和 ModelScope 直连下载；两条链路均可访问，但吞吐不足以在本次工作窗口内完成全量权重获取。当前已保留可断点续传的下载目录和真实权重对齐脚本，拿到完整权重后可直接复跑下面的 harness。
+- 已完成迁移前旧代码与当前代码的 tiny eager parity，其中 loss/logits/full-gradient 差异为 0。
+- 已确认 `inclusionAI/LLaDA2.0-mini-preview` 为非 gated 模型，包含 17 个文件、7 个 safetensors 分片，总权重约 30GB。2026-06-25 已在远端 910B2 机器通过 ModelScope 获取完整权重，并用 `scripts/check_llada2_assets.py --validate-safetensors` 确认资产完整。
+- 真实权重对齐使用固定样本 `/data/t00906153/llada2_alignment_sample.jsonl`、bf16、NPU forward-only 执行。由于 16B 真实权重 backward 对 HBM/CPU 内存要求显著更高，本次真实权重对齐未启用 `--backward`；真实梯度/小步训练曲线建议作为后续生产准入项。
 - transformers v5 会触发 `AttentionMaskConverter` deprecation warning，VeOmni logger 在该 warning 上有非阻塞格式化噪声，不影响结果。
+
+真实权重旧代码 vs 当前代码 NPU bf16 forward parity：
+
+```json
+{
+  "device": "npu",
+  "dtype": "bfloat16",
+  "attn": "eager",
+  "backward": false,
+  "current_loss": 13.501853942871094,
+  "legacy_loss": 13.501853942871094,
+  "loss_abs_diff": 0.0,
+  "logits": {
+    "max_abs": 0.0,
+    "mean_abs": 0.0,
+    "max_rel": 0.0
+  },
+  "current_shards_count": 7,
+  "legacy_shards_count": 7,
+  "current_missing_count": 0,
+  "current_unexpected_count": 0,
+  "legacy_missing_count": 0,
+  "legacy_unexpected_count": 0
+}
+```
 
 真实权重对齐 harness：
 
@@ -226,7 +253,7 @@ python scripts/run_llada2_real_precision_alignment.py \
 也可以用管线脚本把资产检查、样本生成和真实权重对齐串起来；加 `--wait` 后可作为下载完成后的自动 watcher：
 
 ```bash
-python scripts/run_llada2_real_alignment_pipeline.py \
+ASCEND_RT_VISIBLE_DEVICES=1 python scripts/run_llada2_real_alignment_pipeline.py \
   --legacy-repo /home/t00906153/dFactory-legacy-v012 \
   --current-repo /home/t00906153/dFactory-veomni-npu \
   --config-path /home/t00906153/dFactory-veomni-npu/configs/model_configs/llada2_mini \
@@ -240,15 +267,14 @@ python scripts/run_llada2_real_alignment_pipeline.py \
   --wait
 ```
 
-该脚本会在旧代码路径中 monkeypatch 旧版 `fused_moe_forward` 为等价 PyTorch reference MoE，从而在没有旧 CUDA fused kernel 的环境里仍能比较同一真实权重和同一输入的 loss/logits。真实权重加载按 safetensors 分片流式执行，避免先合并完整 16B state dict 带来的额外 CPU 内存峰值。默认只做 forward 对齐以适配 16B 真实权重；需要梯度对齐时可额外传 `--backward`，但这对 HBM/内存要求显著更高。拿到真实权重和固定样本后，应把该结果作为生产级旧/新精度对齐的准入证据。
+该脚本会在旧代码路径中 monkeypatch 旧版 `fused_moe_forward` 为等价 PyTorch reference MoE，从而在没有旧 CUDA fused kernel 的环境里仍能比较同一真实权重和同一输入的 loss/logits。真实权重加载按 safetensors 分片流式执行，避免先合并完整 16B state dict 带来的额外 CPU 内存峰值。默认只做 forward 对齐以适配 16B 真实权重；需要梯度对齐时可额外传 `--backward`，但这对 HBM/内存要求显著更高。若物理 NPU0 被其它任务占用，可通过 `ASCEND_RT_VISIBLE_DEVICES=<id>` 将脚本内逻辑 NPU0 映射到空闲设备。
 
 ## 推荐下一步
 
-1. 准备真实 LLaDA2 mini/flash 权重、tokenizer 与 GSM8K 或内部 SFT 数据，在单卡 NPU 上跑 `max_steps=1`。
-2. 使用 `scripts/run_llada2_real_precision_alignment.py` 对相同 batch 固定 seed 跑旧 v0.1.2 与新 eager，记录 loss/logits/grad 差异。
-3. 将新 eager baseline 与 `fused_npu` 对齐，阈值建议：loss 相对差 < 1%，关键 logits max_abs/mean_abs 结合 dtype 放宽评估。
-4. 扩展到 8 卡 FSDP2，验证 checkpoint save/load 与 HF safetensor 导出。
-5. 若性能不足，再投入 LLaDA2 attention/RMSNorm/RoPE 的 NPU OpSlot 化。
+1. 使用真实 LLaDA2 mini 权重、tokenizer 与 GSM8K 或内部 SFT 数据，在单卡 NPU 上跑 `max_steps=1-10`，记录 loss 曲线。
+2. 将当前 eager baseline 与 `fused_npu` 在真实权重/真实 batch 上对齐，阈值建议：loss 相对差 < 1%，关键 logits max_abs/mean_abs 结合 dtype 放宽评估。
+3. 扩展到 8 卡 FSDP2，验证 checkpoint save/load、HF safetensor 导出与可选 EP routing。
+4. 若性能不足，再投入 LLaDA2 attention/RMSNorm/RoPE 的 NPU OpSlot 化。
 
 ## 参考资料
 
