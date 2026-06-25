@@ -154,11 +154,23 @@ def main():
     alignment_result = run_command(alignment_cmd, capture=True)
     result_path = Path(args.result_path)
     result_path.parent.mkdir(parents=True, exist_ok=True)
-    result_path.write_text(alignment_result.stdout)
     if alignment_result.returncode != 0:
+        result_path.write_text(
+            json.dumps(
+                {
+                    "status": "alignment_failed",
+                    "returncode": alignment_result.returncode,
+                    "stdout": alignment_result.stdout,
+                    "stderr": alignment_result.stderr,
+                },
+                indent=2,
+                sort_keys=True,
+            )
+        )
         raise RuntimeError(
             f"alignment failed; stdout saved to {result_path}\n{alignment_result.stderr}\n{alignment_result.stdout}"
         )
+    result_path.write_text(alignment_result.stdout)
     print(alignment_result.stdout, end="")
     print(json.dumps({"status": "alignment_complete", "result_path": str(result_path)}, indent=2))
 

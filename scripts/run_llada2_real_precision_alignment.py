@@ -294,11 +294,17 @@ def run_worker(repo: Path, args, output_path: Path, mode: str):
             args.dtype,
             str(args.backward),
         ],
-        check=True,
+        check=False,
         env=env,
         text=True,
         capture_output=True,
     )
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"{mode} worker failed with rc={result.returncode}\n"
+            f"stdout:\n{result.stdout}\n"
+            f"stderr:\n{result.stderr}"
+        )
     return result.stdout.strip()
 
 
