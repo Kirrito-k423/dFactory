@@ -23,6 +23,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 
 WORKER_CODE = r"""
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -161,20 +162,73 @@ def load_weights(model, model_path: Path):
         weight_map = json.loads(index_path.read_text())["weight_map"]
         shards = sorted(set(weight_map.values()))
     elif (model_path / "model.safetensors").exists():
+        weight_map = {}
         shards = ["model.safetensors"]
     else:
         raise FileNotFoundError(f"No safetensors weights found under {model_path}")
 
-    model_keys = set(model.state_dict().keys())
+    model_state = model.state_dict()
+    model_keys = set(model_state.keys())
     loaded_keys = set()
     unexpected_keys = set()
+    expert_key_pattern = re.compile(r"^(?P<prefix>.+\.mlp\.experts)\.(?P<expert>\d+)\.(?P<proj>gate_proj|up_proj|down_proj)\.weight$")
+    grouped_expert_pattern = re.compile(r"^(?P<prefix>.+\.mlp\.experts)\.(?P<proj>gate_proj|up_proj|down_proj)$")
+    grouped_expert_keys = {
+        key
+        for key in model_keys
+        if grouped_expert_pattern.match(key)
+    }
+
+    def grouped_key_for_checkpoint_key(key: str):
+        match = expert_key_pattern.match(key)
+        if not match:
+            return None
+        grouped_key = f"{match.group('prefix')}.{match.group('proj')}"
+        if grouped_key not in grouped_expert_keys:
+            return None
+        return grouped_key, int(match.group("expert"))
+
     for shard in shards:
         shard_state = load_file(str(model_path / shard), device="cpu")
-        loaded_keys.update(key for key in shard_state.keys() if key in model_keys)
-        unexpected_keys.update(key for key in shard_state.keys() if key not in model_keys)
-        result = model.load_state_dict(shard_state, strict=False)
+        direct_state = {}
+        for key, value in shard_state.items():
+            if key in model_keys:
+                direct_state[key] = value
+            elif grouped_key_for_checkpoint_key(key) is None:
+                unexpected_keys.add(key)
+        loaded_keys.update(direct_state.keys())
+        result = model.load_state_dict(direct_state, strict=False)
         unexpected_keys.update(result.unexpected_keys)
         del shard_state
+
+    if grouped_expert_keys:
+        expert_locations = {}
+        for key, shard in weight_map.items():
+            mapped = grouped_key_for_checkpoint_key(key)
+            if mapped is None:
+                continue
+            grouped_key, expert_id = mapped
+            expert_locations.setdefault(grouped_key, {}).setdefault(shard, []).append((expert_id, key))
+
+        for grouped_key in sorted(grouped_expert_keys):
+            locations = expert_locations.get(grouped_key, {})
+            if not locations:
+                continue
+            grouped_tensor = torch.empty_like(model_state[grouped_key], device="cpu")
+            seen_experts = set()
+            for shard, entries in sorted(locations.items()):
+                shard_state = load_file(str(model_path / shard), device="cpu")
+                for expert_id, checkpoint_key in entries:
+                    if checkpoint_key not in shard_state:
+                        continue
+                    grouped_tensor[expert_id].copy_(shard_state[checkpoint_key].to(grouped_tensor.dtype))
+                    seen_experts.add(expert_id)
+                del shard_state
+            if len(seen_experts) == grouped_tensor.shape[0]:
+                result = model.load_state_dict({grouped_key: grouped_tensor}, strict=False)
+                loaded_keys.add(grouped_key)
+                unexpected_keys.update(result.unexpected_keys)
+            del grouped_tensor
 
     return {
         "missing": sorted(model_keys - loaded_keys),
