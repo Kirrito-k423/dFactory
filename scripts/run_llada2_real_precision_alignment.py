@@ -99,7 +99,8 @@ def reference_fused_moe_forward(module, num_experts, routing_weights, selected_e
         gate = F.linear(expert_input, fc1_1_weight[expert_idx])
         up = F.linear(expert_input, fc1_2_weight[expert_idx])
         expert_output = F.linear(act_fn(gate) * up, fc2_weight[expert_idx])
-        output.index_add_(0, token_indices, expert_output * routing_weights[token_indices, topk_indices].unsqueeze(-1))
+        weighted_output = expert_output * routing_weights[token_indices, topk_indices].unsqueeze(-1)
+        output.index_add_(0, token_indices, weighted_output.to(output.dtype))
     return output
 
 
